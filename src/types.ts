@@ -161,6 +161,7 @@ export interface FamilyTask {
   note: string;
   proofPhoto?: string;
   completedAt?: string;
+  completedOn?: string;
   completedNote?: string;
 }
 
@@ -183,6 +184,7 @@ export interface CareFeedItem {
   date: string;
   content: string;
   photos: string[];
+  videos?: string[];
   tags: string[];
   likes: number;
   hasLiked?: boolean;

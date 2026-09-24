@@ -38,6 +38,16 @@ import confetti from 'canvas-confetti';
 export type ActiveTab = 'home' | 'archives' | 'space' | 'tasks' | 'feed' | 'profile';
 export type SubView = 'none' | 'baby_archive' | 'elderly_health' | 'ai_assistant' | 'invite_service' | 'member_permission' | 'create_space' | 'task_detail' | 'ai_growth_report' | 'family_space_detail' | 'personal_profile_detail' | 'family_archives_manage';
 
+export interface TaskFeedDraft {
+  taskId: string;
+  title: string;
+  note: string;
+  category: FamilyTask['category'];
+  categoryLabel: string;
+  assigneeName: string;
+  scheduledTime: string;
+}
+
 interface ToastMessage {
   id: string;
   text: string;
@@ -104,8 +114,12 @@ interface FamilyContextType {
   
   addTask: (task: Omit<FamilyTask, 'id' | 'status'>) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus, proofPhoto?: string, completedNote?: string) => void;
+  deleteTask: (taskId: string) => void;
   
-  addFeedItem: (type: CareFeedItem['type'], typeLabel: string, content: string, photos: string[], tags: string[]) => void;
+  addFeedItem: (type: CareFeedItem['type'], typeLabel: string, content: string, photos: string[], tags: string[], videos?: string[]) => void;
+  feedDraft: TaskFeedDraft | null;
+  openTaskCheckIn: (task: FamilyTask) => void;
+  clearFeedDraft: () => void;
   likeFeedItem: (id: string) => void;
   addFeedComment: (feedId: string, content: string) => void;
   
@@ -139,6 +153,23 @@ export const FamilyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [currentSubView, setCurrentSubView] = useState<SubView>('none');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>('m_grandpa');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [feedDraft, setFeedDraft] = useState<TaskFeedDraft | null>(null);
+
+  const openTaskCheckIn = (task: FamilyTask) => {
+    setFeedDraft({
+      taskId: task.id,
+      title: task.title,
+      note: task.note,
+      category: task.category,
+      categoryLabel: task.categoryLabel,
+      assigneeName: task.assigneeName,
+      scheduledTime: task.scheduledTime,
+    });
+    setCurrentSubView('none');
+    setActiveTab('feed');
+  };
+
+  const clearFeedDraft = () => setFeedDraft(null);
 
   const navigateToMemberArchive = (memberId: string) => {
     setSelectedMemberId(memberId);
@@ -587,6 +618,7 @@ export const FamilyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             proofPhoto: proofPhoto || t.proofPhoto,
             completedNote: completedNote || t.completedNote,
             completedAt: status === 'completed' ? '刚刚完成' : t.completedAt,
+            completedOn: status === 'completed' ? new Date().toISOString().slice(0, 10) : t.completedOn,
           };
           return updated;
         }
@@ -605,13 +637,19 @@ export const FamilyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   };
 
+  const deleteTask = (taskId: string) => {
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+    showToast('待开始的任务已删除', 'info');
+  };
+
   // 7. Family Feed Actions
   const addFeedItem = (
     type: CareFeedItem['type'],
     typeLabel: string,
     content: string,
     photos: string[],
-    tags: string[]
+    tags: string[],
+    videos: string[] = []
   ) => {
     const newFeed: CareFeedItem = {
       id: `feed_${Date.now()}`,
@@ -624,6 +662,7 @@ export const FamilyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       date: '今日 (9月16日)',
       content,
       photos,
+      videos,
       tags,
       likes: 0,
       comments: [],
@@ -772,7 +811,11 @@ export const FamilyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         addHealthLog,
         addTask,
         updateTaskStatus,
+        deleteTask,
         addFeedItem,
+        feedDraft,
+        openTaskCheckIn,
+        clearFeedDraft,
         likeFeedItem,
         addFeedComment,
         sendAIMessage,

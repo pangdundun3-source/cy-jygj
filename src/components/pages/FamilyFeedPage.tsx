@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useFamily } from '../../context/FamilyContext';
 import { CareFeedItem } from '../../types';
 import {
@@ -6,12 +6,52 @@ import {
   Heart,
   MessageCircle,
   Camera,
+  ImagePlus,
+  Video,
+  X,
   Send,
   Plus,
   Tag,
   ShieldCheck,
   CheckCircle2,
+  Mic,
+  AudioLines,
+  Square,
 } from 'lucide-react';
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<{
+    isFinal: boolean;
+    0: { transcript: string };
+  }>;
+};
+
+function createRecognizer(): BrowserSpeechRecognition | null {
+  const speechWindow = window as Window & {
+    SpeechRecognition?: new () => BrowserSpeechRecognition;
+    webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
+  };
+  const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+  if (!Recognition) return null;
+  const recognition = new Recognition();
+  recognition.lang = 'zh-CN';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  return recognition;
+}
 
 export const FamilyFeedPage: React.FC = () => {
   const {
@@ -21,14 +61,47 @@ export const FamilyFeedPage: React.FC = () => {
     addFeedComment,
     currentUserMember,
     showToast,
+    feedDraft,
+    clearFeedDraft,
+    updateTaskStatus,
   } = useFamily();
 
   const [filterType, setFilterType] = useState<string>('all');
   const [isPosting, setIsPosting] = useState<boolean>(false);
   const [postContent, setPostContent] = useState<string>('');
   const [postType, setPostType] = useState<CareFeedItem['type']>('baby_daily');
+  const [linkedTaskId, setLinkedTaskId] = useState<string | null>(null);
+  const [linkedTaskTitle, setLinkedTaskTitle] = useState<string>('');
   const [activeCommentFeedId, setActiveCommentFeedId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState<string>('');
+  const [attachments, setAttachments] = useState<{ id: string; url: string; kind: 'image' | 'video' }[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [voiceMode, setVoiceMode] = useState<'idle' | 'dictating' | 'recording'>('idle');
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const draftBaseRef = useRef('');
+  const finalTranscriptRef = useRef('');
+
+  useEffect(() => {
+    if (!feedDraft) return;
+    const typeMap = {
+      baby: 'baby_daily',
+      elderly: 'medical_escort',
+      cleaning: 'cleaning',
+      errand: 'family_moment',
+    } as const;
+    setIsPosting(true);
+    setPostType(typeMap[feedDraft.category]);
+    setPostContent(
+      `【任务打卡】${feedDraft.title}\n时间：${feedDraft.scheduledTime}\n执行人：${feedDraft.assigneeName}\n${feedDraft.note}`
+    );
+    setLinkedTaskId(feedDraft.taskId);
+    setLinkedTaskTitle(feedDraft.title);
+    clearFeedDraft();
+  }, [feedDraft, clearFeedDraft]);
 
   const filteredFeeds = careFeeds.filter((f) => {
     if (filterType === 'all') return true;
@@ -51,12 +124,54 @@ export const FamilyFeedPage: React.FC = () => {
       postType,
       typeLabels[postType],
       postContent,
-      ['https://images.unsplash.com/photo-1596870230751-ebdfce98ec42?w=600&auto=format&fit=crop&q=80'],
-      ['日常打卡', '家庭协作']
+      attachments.filter((item) => item.kind === 'image').map((item) => item.url),
+      ['日常打卡', '家庭协作'],
+      attachments.filter((item) => item.kind === 'video').map((item) => item.url)
     );
+    if (linkedTaskId) {
+      updateTaskStatus(linkedTaskId, 'completed', undefined, postContent);
+      setLinkedTaskId(null);
+      setLinkedTaskTitle('');
+    }
+    finishVoice();
     setPostContent('');
+    setAttachments([]);
     setIsPosting(false);
     showToast('服务照护记录已发布，全家已同步！', 'success');
+  };
+
+  const addAttachmentFiles = (files: FileList | null, kind: 'image' | 'video') => {
+    if (!files?.length) return;
+    const maxBytes = kind === 'image' ? 10 * 1024 * 1024 : 50 * 1024 * 1024;
+    const accepted: { id: string; url: string; kind: 'image' | 'video' }[] = [];
+    Array.from(files).forEach((file) => {
+      const matches = kind === 'image' ? file.type.startsWith('image/') : file.type.startsWith('video/');
+      if (!matches) {
+        showToast(`${file.name} 不是${kind === 'image' ? '图片' : '视频'}`, 'warning');
+        return;
+      }
+      if (file.size > maxBytes) {
+        showToast(`${file.name} 超过 ${kind === 'image' ? '10MB' : '50MB'}`, 'warning');
+        return;
+      }
+      accepted.push({ id: `${kind}_${Date.now()}_${file.name}`, url: URL.createObjectURL(file), kind });
+    });
+    if (accepted.length) setAttachments((prev) => [...prev, ...accepted]);
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((item) => item.id !== id);
+    });
+  };
+
+  const clearAttachments = () => {
+    setAttachments((prev) => {
+      prev.forEach((item) => URL.revokeObjectURL(item.url));
+      return [];
+    });
   };
 
   const handleSendComment = (feedId: string) => {
@@ -65,6 +180,128 @@ export const FamilyFeedPage: React.FC = () => {
     setCommentText('');
     setActiveCommentFeedId(null);
   };
+
+  const applyTranscript = (finalText: string, interimText: string) => {
+    if (finalText) finalTranscriptRef.current += finalText;
+    const spoken = `${finalTranscriptRef.current}${interimText}`.trim();
+    const base = draftBaseRef.current.trim();
+    setPostContent(base && spoken ? `${base}\n${spoken}` : spoken || base);
+  };
+
+  const releaseMicrophone = () => {
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    recognition?.abort();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+    setVoiceMode('idle');
+    setRecordSeconds(0);
+  };
+
+  const finishVoice = () => {
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    recognition?.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+    setVoiceMode('idle');
+    setRecordSeconds(0);
+  };
+
+  const beginRecognition = (mode: 'dictating' | 'recording') => {
+    const recognition = createRecognizer();
+    if (!recognition) {
+      showToast('当前浏览器不支持语音识别，请使用 Chrome 或 Edge', 'warning');
+      return false;
+    }
+    draftBaseRef.current = postContent;
+    finalTranscriptRef.current = '';
+    recognition.onresult = (event) => {
+      let finalText = '';
+      let interimText = '';
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const piece = event.results[i][0]?.transcript ?? '';
+        if (event.results[i].isFinal) finalText += piece;
+        else interimText += piece;
+      }
+      applyTranscript(finalText, interimText);
+    };
+    recognition.onerror = (event) => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        showToast('请允许使用麦克风后再试', 'warning');
+      } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
+        showToast('语音识别失败，请再试一次', 'warning');
+      }
+      releaseMicrophone();
+    };
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) {
+        releaseMicrophone();
+      }
+    };
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      releaseMicrophone();
+      showToast('暂时无法开始语音识别，请再试一次', 'warning');
+      return false;
+    }
+    setVoiceMode(mode);
+    return true;
+  };
+
+  const startDictation = () => {
+    if (voiceMode !== 'idle') {
+      finishVoice();
+      showToast('语音内容已填入输入框', 'success');
+      return;
+    }
+    if (beginRecognition('dictating')) {
+      showToast('开始语音输入，请对着麦克风说话', 'info');
+    }
+  };
+
+  const startRecordToText = async () => {
+    if (voiceMode !== 'idle') {
+      finishVoice();
+      showToast('录音已转为文字并填入输入框', 'success');
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      showToast('当前浏览器不支持录音', 'warning');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      if (!beginRecognition('recording')) {
+        releaseMicrophone();
+      }
+    } catch {
+      showToast('无法打开麦克风，请检查权限', 'warning');
+      releaseMicrophone();
+    }
+  };
+
+  useEffect(() => {
+    if (voiceMode !== 'recording') return;
+    const timer = window.setInterval(() => setRecordSeconds((seconds) => seconds + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [voiceMode]);
+
+  useEffect(() => () => releaseMicrophone(), []);
 
   return (
     <div className="pb-6 pt-2 px-4 space-y-4 max-w-md mx-auto animate-fadeIn">
@@ -82,7 +319,13 @@ export const FamilyFeedPage: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => setIsPosting(!isPosting)}
+          onClick={() => {
+            if (isPosting) {
+              finishVoice();
+              clearAttachments();
+            }
+            setIsPosting(!isPosting);
+          }}
           className="flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition"
         >
           <Plus className="w-4 h-4" />
@@ -119,7 +362,12 @@ export const FamilyFeedPage: React.FC = () => {
           className="bg-white rounded-2xl p-4 border-2 border-emerald-500 shadow-md space-y-3 animate-fadeIn"
         >
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-xs text-stone-900">发布服务照护记录 / 家庭动态</h3>
+            <div>
+              <h3 className="font-bold text-xs text-stone-900">发布服务照护记录 / 家庭动态</h3>
+              {linkedTaskTitle && (
+                <p className="text-[10px] text-emerald-700 mt-0.5">来自任务：{linkedTaskTitle}</p>
+              )}
+            </div>
             <span className="text-[11px] text-stone-400">以 {currentUserMember.name} 身份发布</span>
           </div>
 
@@ -145,15 +393,115 @@ export const FamilyFeedPage: React.FC = () => {
             className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs bg-stone-50/50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           />
 
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={startDictation}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition ${
+                voiceMode === 'dictating'
+                  ? 'bg-emerald-700 text-white border-emerald-700'
+                  : 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-50'
+              }`}
+            >
+              {voiceMode === 'dictating' ? <Square className="w-3 h-3" /> : <Mic className="w-3.5 h-3.5" />}
+              {voiceMode === 'dictating' ? '结束语音' : '语音'}
+            </button>
+            <button
+              type="button"
+              onClick={startRecordToText}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition ${
+                voiceMode === 'recording'
+                  ? 'bg-rose-600 text-white border-rose-600'
+                  : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+              }`}
+            >
+              {voiceMode === 'recording' ? <Square className="w-3 h-3" /> : <AudioLines className="w-3.5 h-3.5" />}
+              {voiceMode === 'recording'
+                ? `结束录音 ${Math.floor(recordSeconds / 60)}:${String(recordSeconds % 60).padStart(2, '0')}`
+                : '录音转文字'}
+            </button>
+          </div>
+          {voiceMode !== 'idle' && (
+            <p className="text-[10px] text-stone-500 -mt-1">
+              {voiceMode === 'dictating' ? '正在听写，识别结果会直接写入上方输入框' : '正在录音，结束后自动转成文字填入输入框'}
+            </p>
+          )}
+
+          <div className="flex items-center gap-2">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addAttachmentFiles(e.target.files, 'image');
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addAttachmentFiles(e.target.files, 'video');
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+            >
+              <ImagePlus className="w-3.5 h-3.5" />
+              上传图片
+            </button>
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+            >
+              <Video className="w-3.5 h-3.5" />
+              上传视频
+            </button>
+          </div>
+          {attachments.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {attachments.map((item) => (
+                <div key={item.id} className="relative rounded-xl overflow-hidden border border-stone-200 bg-stone-100 h-20">
+                  {item.kind === 'image' ? (
+                    <img src={item.url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <video src={item.url} className="w-full h-full object-cover" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(item.id)}
+                    className="absolute top-1 right-1 w-4 h-4 rounded-full bg-stone-900/70 text-white flex items-center justify-center"
+                    aria-label="移除"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-1.5 text-xs text-stone-500">
               <Camera className="w-4 h-4 text-stone-400" />
-              <span>附带现场照片</span>
+              <span>{attachments.length > 0 ? `已选 ${attachments.length} 个文件` : '可附带图片或视频'}</span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setIsPosting(false)}
+                onClick={() => {
+                  finishVoice();
+                  clearAttachments();
+                  setIsPosting(false);
+                }}
                 className="px-3 py-1.5 text-xs text-stone-600 bg-stone-100 rounded-lg"
               >
                 取消
@@ -200,19 +548,27 @@ export const FamilyFeedPage: React.FC = () => {
             <p className="text-xs text-stone-800 leading-relaxed">{feed.content}</p>
 
             {/* 照片网格 */}
-            {feed.photos.length > 0 && (
+            {(feed.photos.length > 0 || (feed.videos?.length ?? 0) > 0) && (
               <div
                 className={`grid gap-2 pt-1 ${
-                  feed.photos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+                  feed.photos.length + (feed.videos?.length ?? 0) === 1 ? 'grid-cols-1' : 'grid-cols-2'
                 }`}
               >
                 {feed.photos.map((url, idx) => (
                   <img
-                    key={idx}
+                    key={`photo-${idx}`}
                     src={url}
                     alt="feed"
                     className="w-full h-36 object-cover rounded-xl border border-stone-200 shadow-2xs"
                     referrerPolicy="no-referrer"
+                  />
+                ))}
+                {feed.videos?.map((url, idx) => (
+                  <video
+                    key={`video-${idx}`}
+                    src={url}
+                    controls
+                    className="w-full h-36 object-cover rounded-xl border border-stone-200 bg-stone-900"
                   />
                 ))}
               </div>

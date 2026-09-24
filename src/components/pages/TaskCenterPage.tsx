@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useFamily } from '../../context/FamilyContext';
 import { FamilyTask, TaskCategory, TaskStatus } from '../../types';
 import {
   CheckSquare,
   Plus,
+  X,
   Clock,
+  Trash2,
   CheckCircle2,
   AlertCircle,
   Camera,
@@ -20,6 +23,8 @@ export const TaskCenterPage: React.FC = () => {
     members,
     addTask,
     updateTaskStatus,
+    deleteTask,
+    openTaskCheckIn,
     currentUserMember,
     showToast,
   } = useFamily();
@@ -35,7 +40,17 @@ export const TaskCenterPage: React.FC = () => {
   const [scheduledTime, setScheduledTime] = useState<string>('今日 16:30');
   const [note, setNote] = useState<string>('');
 
-  const filteredTasks = tasks.filter((t) => {
+  const visibleTasks = tasks.filter((task) => {
+    if (task.status !== 'completed') return true;
+    if (!task.completedOn) return true;
+    const completed = new Date(`${task.completedOn}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const keptDays = (today.getTime() - completed.getTime()) / 86400000;
+    return keptDays < 30;
+  });
+
+  const filteredTasks = visibleTasks.filter((t) => {
     if (filterStatus === 'pending' && t.status === 'completed') return false;
     if (filterStatus === 'completed' && t.status !== 'completed') return false;
     if (filterCategory !== 'all' && t.category !== filterCategory) return false;
@@ -103,7 +118,7 @@ export const TaskCenterPage: React.FC = () => {
               : 'text-stone-600 hover:text-stone-900'
           }`}
         >
-          全部 ({tasks.length})
+          全部 ({visibleTasks.length})
         </button>
         <button
           onClick={() => setFilterStatus('pending')}
@@ -113,7 +128,7 @@ export const TaskCenterPage: React.FC = () => {
               : 'text-stone-600 hover:text-stone-900'
           }`}
         >
-          进行与待办 ({tasks.filter((t) => t.status !== 'completed').length})
+          进行与待办 ({visibleTasks.filter((t) => t.status !== 'completed').length})
         </button>
         <button
           onClick={() => setFilterStatus('completed')}
@@ -123,109 +138,139 @@ export const TaskCenterPage: React.FC = () => {
               : 'text-stone-600 hover:text-stone-900'
           }`}
         >
-          已完成 ({tasks.filter((t) => t.status === 'completed').length})
+          已完成 ({visibleTasks.filter((t) => t.status === 'completed').length})
         </button>
       </div>
 
       {/* 新建任务表单抽屉/弹层 */}
-      {isCreatingTask && (
-        <form
-          onSubmit={handleCreateTaskSubmit}
-          className="bg-white rounded-2xl p-4 border-2 border-emerald-500 shadow-lg space-y-3 animate-fadeIn"
+      {isCreatingTask && createPortal(
+        <div
+          className="absolute inset-0 z-50 bg-stone-900/40 flex items-end"
+          onClick={() => setIsCreatingTask(false)}
         >
-          <div className="flex items-center justify-between pb-1 border-b border-stone-100">
-            <h3 className="font-bold text-sm text-stone-900">创建新家庭协作任务</h3>
-            <button
-              type="button"
-              onClick={() => setIsCreatingTask(false)}
-              className="text-stone-400 hover:text-stone-600 text-xs font-bold"
-            >
-              关闭
-            </button>
-          </div>
+          <form
+            onSubmit={handleCreateTaskSubmit}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-h-[78%] overflow-y-auto bg-[#FBFBF9] rounded-t-[1.6rem] px-4 pt-2.5 pb-5 shadow-2xl space-y-3 animate-fadeIn"
+          >
+            <div className="mx-auto w-9 h-1 rounded-full bg-stone-300" />
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm text-stone-900">发布任务</h3>
+                <p className="text-[10px] text-stone-500 mt-0.5">指派给家人或服务人员</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreatingTask(false)}
+                className="w-7 h-7 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center"
+                aria-label="关闭"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-          <div className="space-y-2.5 text-xs">
-            <div>
-              <label className="font-bold text-stone-700 block mb-1">任务名称</label>
+            <label className="block">
+              <span className="text-[11px] font-bold text-stone-500">做什么</span>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="例如：下午16:30接小宝放学 / 爷爷陪诊"
-                className="w-full px-3 py-2 rounded-xl border border-stone-300 bg-stone-50/50 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                placeholder="例如：接小宝放学"
+                className="mt-1 w-full px-3 py-2.5 rounded-2xl border border-stone-200 bg-white text-xs font-medium text-stone-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
+            </label>
+
+            <div>
+              <span className="text-[11px] font-bold text-stone-500">类型</span>
+              <div className="mt-1 grid grid-cols-4 gap-1.5">
+                {(
+                  [
+                    ['baby', '育儿'],
+                    ['elderly', '健康'],
+                    ['cleaning', '保洁'],
+                    ['errand', '杂事'],
+                  ] as [TaskCategory, string][]
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setCategory(id)}
+                    className={`py-2 rounded-xl text-[11px] font-bold ${
+                      category === id
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-white text-stone-600 border border-stone-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-bold text-stone-700 block mb-1">任务类型</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as TaskCategory)}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 bg-stone-50/50 text-xs"
-                >
-                  <option value="baby">👶 宝宝育儿</option>
-                  <option value="elderly">👴 老人健康</option>
-                  <option value="cleaning">🏠 家务保洁</option>
-                  <option value="errand">🛒 家庭杂事</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-stone-700 block mb-1">指派负责人</label>
+            <div className="grid grid-cols-1 gap-3">
+              <label className="block">
+                <span className="text-[11px] font-bold text-stone-500">谁来做</span>
                 <select
                   value={assigneeId}
                   onChange={(e) => setAssigneeId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 bg-stone-50/50 text-xs"
+                  className="mt-1 w-full px-3 py-2.5 rounded-2xl border border-stone-200 bg-white text-xs font-medium text-stone-800"
                 >
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.avatar} {m.name} ({m.roleLabel.split(' ')[0]})
+                      {m.avatar} {m.name}
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <div>
+                <span className="text-[11px] font-bold text-stone-500">什么时候</span>
+                <div className="mt-1 flex gap-1.5">
+                  {['今日 16:30', '明日 09:00', '本周六 09:30'].map((slot) => (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => setScheduledTime(slot)}
+                      className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold ${
+                        scheduledTime === slot
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                          : 'bg-white text-stone-500 border border-stone-200'
+                      }`}
+                    >
+                      {slot.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  placeholder="今日 16:30"
+                  className="mt-1.5 w-full px-3 py-2.5 rounded-2xl border border-stone-200 bg-white text-xs font-medium text-stone-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
               </div>
             </div>
 
-            <div>
-              <label className="font-bold text-stone-700 block mb-1">执行时间</label>
-              <input
-                type="text"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                placeholder="今日 16:30 / 本周六 09:30"
-                className="w-full px-3 py-2 rounded-xl border border-stone-300 bg-stone-50/50 text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-stone-700 block mb-1">注意事项 / 备注说明</label>
+            <label className="block">
+              <span className="text-[11px] font-bold text-stone-500">备注</span>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="如需要带水壶、注意添衣等..."
+                placeholder="需要带的东西、注意事项"
                 rows={2}
-                className="w-full px-3 py-2 rounded-xl border border-stone-300 bg-stone-50/50 text-xs"
+                className="mt-1 w-full px-3 py-2.5 rounded-2xl border border-stone-200 bg-white text-xs font-medium text-stone-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
-            </div>
-          </div>
+            </label>
 
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsCreatingTask(false)}
-              className="px-3 py-2 text-xs text-stone-600 bg-stone-100 rounded-xl"
-            >
-              取消
-            </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs"
+              className="w-full py-2.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-2xl"
             >
-              确认发布
+              发布
             </button>
-          </div>
-        </form>
+          </form>
+        </div>,
+        document.querySelector('[data-phone-frame]') ?? document.body
       )}
 
       {/* 任务列表 */}
@@ -300,24 +345,26 @@ export const TaskCenterPage: React.FC = () => {
 
                   <div className="flex items-center gap-1.5">
                     {!isCompleted && !isInProgress && (
-                      <button
-                        onClick={() => updateTaskStatus(task.id, 'in_progress')}
-                        className="px-2.5 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg font-bold text-xs border border-sky-200 transition"
-                      >
-                        开始执行
-                      </button>
+                      <>
+                        <button
+                          onClick={() => deleteTask(task.id)}
+                          className="px-2 py-1.5 text-stone-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg font-bold text-xs border border-stone-200 transition flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          删除
+                        </button>
+                        <button
+                          onClick={() => updateTaskStatus(task.id, 'in_progress')}
+                          className="px-2.5 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg font-bold text-xs border border-sky-200 transition"
+                        >
+                          开始执行
+                        </button>
+                      </>
                     )}
 
-                    {!isCompleted && (
+                    {isInProgress && (
                       <button
-                        onClick={() => {
-                          updateTaskStatus(
-                            task.id,
-                            'completed',
-                            'https://images.unsplash.com/photo-1596870230751-ebdfce98ec42?w=600&auto=format&fit=crop&q=80',
-                            '服务打卡照片已同步归档'
-                          );
-                        }}
+                        onClick={() => openTaskCheckIn(task)}
                         className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow-2xs transition flex items-center gap-1"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -338,6 +385,9 @@ export const TaskCenterPage: React.FC = () => {
           })
         )}
       </div>
+      <p className="text-center text-[11px] text-stone-400 leading-relaxed px-2">
+        已完成的任务只保留 30 天，到期后自动清空
+      </p>
     </div>
   );
 };
