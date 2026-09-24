@@ -85,22 +85,22 @@ export const HomePage: React.FC = () => {
     <div className="pb-8 pt-2 px-4 space-y-4 max-w-md mx-auto animate-fadeIn">
       {/* 1. 顶部空间标识与欢迎卡片 */}
       <div className="bg-gradient-to-br from-emerald-700 via-teal-700 to-emerald-800 text-white rounded-3xl p-4.5 shadow-sm relative overflow-hidden">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-xs flex items-center justify-center text-xl shadow-inner border border-white/20">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-xs flex items-center justify-center text-xl shadow-inner border border-white/20 shrink-0">
               🏡
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold tracking-tight text-white">
-                  {activeFamilySpace.name}
-                </h2>
-                <span className="px-2 py-0.5 bg-white/20 text-white text-[10px] font-medium rounded-full border border-white/25">
+            <div className="min-w-0">
+              <h2 className="text-base font-bold tracking-tight text-white truncate">
+                {activeFamilySpace.name}
+              </h2>
+              <p className="text-[11px] text-emerald-100/90 mt-0.5 flex items-center gap-1.5 min-w-0">
+                <span className="truncate">
+                  {coreFamilyMembers.length}位家人 · 2位协同服务人员
+                </span>
+                <span className="shrink-0 whitespace-nowrap px-1.5 py-0.5 bg-white/20 text-white text-[10px] font-medium rounded-full border border-white/25">
                   数字空间
                 </span>
-              </div>
-              <p className="text-[11px] text-emerald-100/90 mt-0.5">
-                {coreFamilyMembers.length}位家人 · 2位协同服务人员
               </p>
             </div>
           </div>
@@ -111,7 +111,7 @@ export const HomePage: React.FC = () => {
               setActiveTab('archives');
               setCurrentSubView('none');
             }}
-            className="px-3 py-1.5 bg-white/15 hover:bg-white/25 active:scale-95 rounded-xl transition text-xs font-bold text-white flex items-center gap-1 border border-white/25 shadow-xs"
+            className="shrink-0 whitespace-nowrap px-2.5 py-1.5 bg-white/15 hover:bg-white/25 active:scale-95 rounded-xl transition text-xs font-bold text-white flex items-center gap-1 border border-white/25 shadow-xs"
           >
             <FolderHeart className="w-3.5 h-3.5" />
             <span>全家档案</span>
@@ -126,7 +126,7 @@ export const HomePage: React.FC = () => {
               当前身份：<strong className="text-white">{currentUserMember.name}</strong>
             </span>
           </div>
-          <span className="text-[10px] bg-white/15 px-2 py-0.5 rounded-full font-medium border border-white/20">
+          <span className="shrink-0 whitespace-nowrap text-[10px] bg-white/15 px-2 py-0.5 rounded-full font-medium border border-white/20">
             {currentUserMember.role === 'owner'
               ? '主成员 (控权)'
               : isExternalStaff
@@ -177,15 +177,15 @@ export const HomePage: React.FC = () => {
                     {member.avatar}
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <span className="font-bold text-xs text-stone-900 truncate">
                         {member.name}
                       </span>
-                      <span className="text-[10px] text-stone-500 font-normal">
+                      <span className="text-[10px] text-stone-500 font-normal shrink-0 whitespace-nowrap">
                         ({member.relation})
                       </span>
                       <span
-                        className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold border ${statusInfo.tagBg}`}
+                        className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold border shrink-0 whitespace-nowrap ${statusInfo.tagBg}`}
                       >
                         {statusInfo.tag}
                       </span>
@@ -198,7 +198,7 @@ export const HomePage: React.FC = () => {
 
                 <div className="flex items-center gap-1 shrink-0 text-stone-400 group-hover:text-emerald-700 transition">
                   {ongoingTasksCount > 0 && (
-                    <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md border border-emerald-200">
+                    <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md border border-emerald-200 whitespace-nowrap">
                       {ongoingTasksCount}项照护
                     </span>
                   )}

@@ -83,13 +83,13 @@ export const PhoneFrame: React.FC = () => {
   const isSubViewActive = currentSubView !== 'none';
 
   return (
-    <div className="flex justify-center items-center w-full px-2 pb-8">
-      {/* Phone container mockup */}
+    <div className="flex justify-center items-start w-full px-3 pb-6">
+      {/* Phone container mockup — width follows the window so a short viewport stays phone-shaped */}
       <div
-        className={`w-full max-w-[420px] bg-[#FBFBF9] transition-all duration-300 relative flex flex-col ${
+        className={`w-[min(360px,calc(100vw-1.5rem),calc((100dvh-9.5rem)*6/13))] aspect-[6/13] max-h-[calc(100dvh-9.5rem)] bg-[#FBFBF9] transition-all duration-300 relative flex flex-col ${
           isPhoneFrameEnabled
-            ? 'rounded-[50px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3),0_0_0_12px_#1e1e1e,0_0_0_14px_#3a3a3a] border-4 border-stone-800 ring-1 ring-black/10 my-2 overflow-hidden h-[844px] max-h-[calc(100vh-140px)] min-h-[620px]'
-            : 'rounded-3xl shadow-xl border border-stone-300/80 my-2 overflow-hidden h-[844px] max-h-[calc(100vh-140px)] min-h-[620px]'
+            ? 'rounded-[2.4rem] shadow-[0_22px_50px_-16px_rgba(0,0,0,0.28),0_0_0_10px_#1e1e1e,0_0_0_12px_#3a3a3a] border-4 border-stone-800 ring-1 ring-black/10 my-2 overflow-hidden'
+            : 'rounded-3xl shadow-xl border border-stone-300/80 my-2 overflow-hidden'
         }`}
       >
         {/* iOS / Mobile Status Bar & Dynamic Island */}
