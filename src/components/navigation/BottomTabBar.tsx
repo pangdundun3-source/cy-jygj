@@ -61,18 +61,18 @@ export const BottomTabBar: React.FC = () => {
                 setActiveTab(item.id);
                 setCurrentSubView('none');
               }}
-              className={`relative flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all ${
+              className={`relative flex flex-col items-center justify-center flex-1 py-0.5 rounded-xl transition-all ${
                 isActive ? 'text-emerald-700 font-semibold' : 'text-stone-400 hover:text-stone-600'
               }`}
             >
               <div className="relative">
                 <Icon
-                  className={`w-5 h-5 transition-transform duration-200 ${
-                    isActive ? 'scale-110 text-emerald-700 stroke-[2.3]' : 'stroke-[1.8]'
+                  className={`w-4 h-4 transition-transform duration-200 ${
+                    isActive ? 'scale-105 text-emerald-700 stroke-[2.3]' : 'stroke-[1.8]'
                   }`}
                 />
                 {typeof item.badge === 'number' && (
-                  <span className="absolute -top-1 -right-2.5 bg-rose-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center border border-white shadow-xs">
+                  <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center border border-white shadow-xs">
                     {item.badge}
                   </span>
                 )}
@@ -81,7 +81,7 @@ export const BottomTabBar: React.FC = () => {
                 )}
               </div>
               <span
-                className={`text-[11px] mt-0.5 tracking-tight ${
+                className={`text-[10px] mt-0.5 tracking-tight ${
                   isActive ? 'text-emerald-800 font-bold' : 'text-stone-500'
                 }`}
               >

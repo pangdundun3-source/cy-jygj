@@ -407,6 +407,7 @@ export const INITIAL_TASKS: FamilyTask[] = [
     priority: 'normal',
     note: '已从医保定点药房采购氨氯地平2盒，放入客厅药品收纳盒。',
     completedAt: '09-15 17:40',
+    completedOn: '2026-09-15',
     completedNote: '药盒已归置，并更新了家庭药品库存。',
   },
 ];

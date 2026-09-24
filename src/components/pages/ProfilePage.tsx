@@ -235,8 +235,8 @@ export const ProfilePage: React.FC = () => {
             }}
             className="p-2.5 bg-stone-50 hover:bg-stone-100 rounded-2xl border border-stone-200/70 transition cursor-pointer"
           >
-            <span className="text-[10px] text-stone-500 block">成员基础档案</span>
-            <span className="text-sm font-bold text-stone-900">{memberBaseProfiles.length} 人 (全家)</span>
+            <span className="text-[10px] text-stone-500 block leading-tight">成员基础档案</span>
+            <span className="text-xs font-bold text-stone-900 leading-tight">{memberBaseProfiles.length} 人 · 全家</span>
           </div>
 
           <div
@@ -245,9 +245,10 @@ export const ProfilePage: React.FC = () => {
             }}
             className="p-2.5 bg-emerald-50/70 hover:bg-emerald-100/80 rounded-2xl border border-emerald-100 transition cursor-pointer"
           >
-            <span className="text-[10px] text-emerald-700 block">进行中阶段任务</span>
-            <span className="text-sm font-bold text-emerald-800">
-              {stageTasks.filter((t) => !t.isArchived).length} 项 (陪诊/慢病)
+            <span className="text-[10px] text-emerald-700 block leading-tight">进行中阶段任务</span>
+            <span className="text-xs font-bold text-emerald-800 leading-tight">
+              {stageTasks.filter((t) => !t.isArchived).length} 项
+              <span className="block text-[10px] font-semibold">陪诊 / 慢病</span>
             </span>
           </div>
 
@@ -257,8 +258,8 @@ export const ProfilePage: React.FC = () => {
             }}
             className="p-2.5 bg-amber-50/70 hover:bg-amber-100/80 rounded-2xl border border-amber-100 transition cursor-pointer"
           >
-            <span className="text-[10px] text-amber-700 block">已归档历史任务</span>
-            <span className="text-sm font-bold text-amber-800">
+            <span className="text-[10px] text-amber-700 block leading-tight">已归档历史任务</span>
+            <span className="text-xs font-bold text-amber-800 leading-tight">
               {stageTasks.filter((t) => t.isArchived).length} 项结案
             </span>
           </div>
